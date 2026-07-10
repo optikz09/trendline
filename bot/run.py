@@ -72,6 +72,44 @@ def cmd_live(args) -> int:
     return 0
 
 
+def cmd_importhst(args) -> int:
+    from trendline_bot.mt4data import find_hst, read_hst, write_csv
+    cfg = _load_cfg(args)
+    symbol = args.symbol or cfg.symbol
+    tf = args.timeframe or cfg.timeframe_minutes
+
+    path = args.hst
+    if not path:
+        found = find_hst(symbol, tf)
+        if not found:
+            print(f"No {symbol}{tf}.hst found under %APPDATA%\\MetaQuotes\\Terminal.\n"
+                  f"Open a {symbol} chart at that timeframe in MT4 (scroll back for more "
+                  f"history), then retry — or pass --hst <path>.")
+            return 1
+        path = found[0]
+        if len(found) > 1:
+            print(f"Found {len(found)} candidates; using newest: {path}")
+
+    hst = read_hst(path)
+    if not hst.candles:
+        print(f"{path}: no bars.")
+        return 1
+    out = args.out or os.path.join("data", f"{symbol}{tf}.csv")
+    write_csv(hst.candles, out)
+    first, last = hst.candles[0].time, hst.candles[-1].time
+    print(f"Wrote {len(hst.candles)} bars ({first:%Y-%m-%d} .. {last:%Y-%m-%d}) -> {out}")
+    print(f"  source : {path} (HST v{hst.version}, {hst.digits} digits)")
+
+    stats = hst.spread_stats()
+    if stats:
+        print(f"  spread : median {stats['median_price']:.2f} / mean {stats['mean_price']:.2f} "
+              f"price units over {stats['bars']} bars — set \"spread\": {stats['median_price']:.2f} "
+              f"in config.json for realistic backtests")
+    else:
+        print("  spread : not recorded in this file — use the EA's spec.json export instead")
+    return 0
+
+
 def cmd_gensample(args) -> int:
     from gen_sample import generate  # local helper
     generate(args.out)
@@ -101,6 +139,13 @@ def main() -> int:
     l.add_argument("--symbol")
     l.add_argument("--once", action="store_true", help="evaluate one cycle and exit")
     l.set_defaults(func=cmd_live)
+
+    h = sub.add_parser("importhst", help="convert MT4 .hst history (real broker data) to bot CSV")
+    h.add_argument("--symbol", help="broker symbol (default: config symbol)")
+    h.add_argument("--timeframe", type=int, help="minutes, e.g. 240 (default: config timeframe)")
+    h.add_argument("--hst", help="explicit .hst path (default: auto-discover in %%APPDATA%%)")
+    h.add_argument("--out", help="output CSV (default: data/<symbol><tf>.csv)")
+    h.set_defaults(func=cmd_importhst)
 
     g = sub.add_parser("gensample", help="regenerate the demo dataset")
     g.add_argument("--out", default="sample_data/XPTUSD_H4.csv")

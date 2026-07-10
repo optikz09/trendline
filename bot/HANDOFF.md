@@ -30,8 +30,10 @@ No dependencies to install — pure Python 3.9+ standard library.
 | `bot/trendline_bot/strategy.py` | Bounce + Break signal engine. **The core logic.** |
 | `bot/trendline_bot/backtest.py` | Event-driven walk-forward backtester. |
 | `bot/trendline_bot/broker.py` | Position sizing + `PaperBroker` + `FileBridgeBroker` (MT4). |
-| `bot/trendline_bot/live.py` | Live poll loop. |
-| `bot/run.py` | CLI: `scan` / `backtest` / `live` / `gensample`. |
+| `bot/trendline_bot/live.py` | Live poll loop; folds the EA's `<symbol>_spec.json` (broker truth) into the config. |
+| `bot/trendline_bot/mt4data.py` | Reads MT4 `.hst` history files directly from the terminal — real broker data for backtests. |
+| `bot/run.py` | CLI: `scan` / `backtest` / `live` / `importhst` / `gensample`. |
+| `bot/data/XPTUSD240.csv` | Real HugosWay-Live platinum H4 (2024-10 .. 2026-02), imported via `importhst`. |
 | `bot/gen_sample.py` | Regenerates the deterministic demo dataset. |
 | `bot/sample_data/XPTUSD_H4.csv` | Committed demo series (contains bounce + break setups). |
 | `bot/config.example.json` | Copy to `config.json` (git-ignored) and edit for live. |
@@ -62,9 +64,15 @@ snapped to `lot_step`, clamped to `[min_lot, max_lot]`.
 
 ```
 MT4 EA  --writes-->  <bridge>/XPTUSD_240_rates.csv   --read by--> bot live loop
+MT4 EA  --writes-->  <bridge>/XPTUSD_spec.json       --read by--> bot (broker truth, ~1/min)
 bot     --writes-->  <bridge>/commands.jsonl         --read by--> MT4 EA (OrderSend)
 MT4 EA  --writes-->  <bridge>/acks.jsonl             (fill/error status, one per id)
 ```
+
+`spec.json` carries the broker's real contract size, lot limits, running average spread, and
+account balance. The live loop overrides the matching config fields with it every cycle, so
+sizing-critical numbers are never hand-typed (this retires the `contract_size` footgun in live —
+it still matters for offline backtest configs).
 
 - `<bridge>` is the terminal's `MQL4/Files/trendline_bridge` folder (EA creates it).
 - Command protocol: one JSON object per line in `commands.jsonl`
@@ -88,10 +96,13 @@ MT4 EA  --writes-->  <bridge>/acks.jsonl             (fill/error status, one per
 
 ## 5. Known limitations / risks (READ before trading real money)
 
-1. **`contract_size` default `1.0` is demo-only.** Set it to HugosWay's real platinum contract size
-   or position sizing is wrong (possibly by 100×). Verify lots on a demo/cent account first.
-2. **No proven edge.** Backtest numbers are on *synthetic* data — they validate mechanics, not
-   profitability. Forward-test on demo, then minimum size.
+1. **`contract_size` default `1.0` is demo-only.** In live the EA's `spec.json` overrides it with
+   broker truth automatically (watch for the `[LIVE] broker spec:` log line before trusting lots);
+   for backtests/scans it still comes from config. Verify lots on a demo/cent account first.
+2. **No proven edge.** On real HugosWay H4 data (2024-10..2026-02, `bot/data/XPTUSD240.csv`) the
+   strategy is break-even before costs: 17 trades, 35% win rate, +0.02R/trade — i.e. losing after
+   spread. Most losers are break-shorts fighting the 2025 platinum uptrend; the HTF trend filter
+   (backlog) is the obvious next lever. Do not trade this live yet.
 3. **`max_norm_slope` "45°" filter is an approximation** of a visual rule; tune per instrument.
 4. **No trade management yet** — no trailing stop, break-even move, or partial take-profit. One
    position at a time; entry at bar close.
@@ -110,8 +121,13 @@ MT4 EA  --writes-->  <bridge>/acks.jsonl             (fill/error status, one per
 - [ ] **Break-and-retest entry** variant (higher win-rate than raw break; rulebook §4).
 - [ ] **Unit tests** for `trendlines.py` and `strategy.py` (pin behaviour on the sample data;
       cost-model tests exist — run `python -m unittest discover tests` from `bot/`).
-- [ ] **Higher-timeframe trend filter** (only take longs when Daily/Weekly trend is up, etc.).
-- [ ] **Real historical Platinum data** to replace the synthetic sample for meaningful backtests.
+- [ ] **Higher-timeframe trend filter** (only take longs when Daily/Weekly trend is up, etc.) —
+      *promoted to top priority*: on real data most losses are break-shorts against the 2025 uptrend.
+- [x] **Real historical Platinum data** — `run.py importhst` reads the terminal's `.hst` files
+      directly (`bot/data/XPTUSD240.csv`, HugosWay-Live H4 2024-10..2026-02). Open the XPTUSD chart
+      and scroll back in MT4 to deepen history, then re-run `importhst`.
+- [x] **Broker spec bridge** — EA exports `<symbol>_spec.json` (contract size, lot limits, live
+      average spread, balance); live loop folds it into the config every cycle.
 - [ ] **acks.jsonl consumption** in the bot (surface fills/errors back into the live log).
 - [x] Migrated to its own repo (`optikz09/trendline`), out of the legacy PPTtoSVG repo.
 
@@ -124,6 +140,8 @@ python3 run.py scan     --data sample_data/XPTUSD_H4.csv         # latest-bar si
 python3 run.py --config config.json live --bridge "<MQL4/Files/trendline_bridge>" --broker paper
 python3 run.py --config config.json live --bridge "<...>"        --broker mt4     # sends orders
 python3 run.py gensample --out sample_data/XPTUSD_H4.csv         # regenerate demo data
+python3 run.py importhst                                          # pull real MT4 history -> data/
+python3 -m unittest discover tests                                # unit tests
 ```
 
 ## 8. Go-live checklist (HugosWay / PRO4)

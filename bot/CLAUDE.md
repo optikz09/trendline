@@ -18,10 +18,16 @@ built to execute on a **HugosWay PRO4 / MT4** account. Full continuity notes are
 - Verify changes with `python3 run.py backtest --data sample_data/XPTUSD_H4.csv` before committing.
 
 ## Live-trading footguns (state these when relevant)
-- `config.contract_size` defaults to `1.0` (demo-only) — must match the broker's platinum contract
-  size or sizing is wrong. Backtest costs (`spread`/`slippage`/`commission_per_lot`) default to 0 =
-  ideal fills; set them from real HugosWay quotes before trusting expectancy.
+- `config.contract_size` defaults to `1.0` (demo-only). In live the EA's `<symbol>_spec.json`
+  overrides it with broker truth; in backtests it comes from config. Backtest costs
+  (`spread`/`slippage`/`commission_per_lot`) default to 0 = ideal fills.
+- **No proven edge yet**: on real HugosWay H4 data (`bot/data/XPTUSD240.csv`) the strategy is
+  break-even before costs; most losses fight the HTF trend. Do not suggest going live.
+- The user's HugosWay terminal data folder on this machine:
+  `%APPDATA%\MetaQuotes\Terminal\0F19E7A51481BB64C858CDD0D2A04C81` (server `Hugosway-Live`).
+  `run.py importhst` auto-discovers `.hst` history there.
 
 ## Top backlog (see HANDOFF.md §6)
-Trade management (trailing/BE/partials) → break-and-retest entry → unit tests for
-trendlines/strategy (cost-model tests exist: `python -m unittest discover tests` from `bot/`).
+HTF trend filter (top priority — see HANDOFF §5.2) → trade management (trailing/BE/partials) →
+break-and-retest entry → unit tests for trendlines/strategy
+(run `python -m unittest discover tests` from `bot/`).

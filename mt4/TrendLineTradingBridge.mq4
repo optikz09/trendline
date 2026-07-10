@@ -19,8 +19,12 @@ extern double MaxSpreadPoints  = 0;                  // 0 = ignore; else skip if
 
 int      lastProcessed = 0;      // highest command line index already executed
 datetime lastBarTime   = 0;
+double   spreadSum     = 0;      // running spread average for spec.json
+int      spreadN       = 0;
+int      specCountdown = 0;      // timer ticks until the next spec refresh
 
 string RatesFile()    { return BridgeSubfolder + "\\" + Symbol() + "_" + IntegerToString(PeriodMinutes()) + "_rates.csv"; }
+string SpecFile()     { return BridgeSubfolder + "\\" + Symbol() + "_spec.json"; }
 string CommandsFile() { return BridgeSubfolder + "\\commands.jsonl"; }
 string AcksFile()     { return BridgeSubfolder + "\\acks.jsonl"; }
 int    PeriodMinutes(){ return Period(); }           // MT4 Period() already returns minutes
@@ -32,8 +36,10 @@ int OnInit()
       Print("WARNING: TrendLine bot targets H1 and above; current TF is ", Period(), "m.");
    EventSetTimer(PollSeconds);
    ExportRates();
+   ExportSpec();
    lastProcessed = CountAcks();
-   Print("TrendLineTradingBridge ready. Rates -> ", RatesFile(), "  Commands <- ", CommandsFile());
+   Print("TrendLineTradingBridge ready. Rates -> ", RatesFile(), "  Spec -> ", SpecFile(),
+         "  Commands <- ", CommandsFile());
    return(INIT_SUCCEEDED);
   }
 
@@ -51,7 +57,19 @@ void OnTick()
      }
   }
 
-void OnTimer() { ProcessCommands(); }
+void OnTimer()
+  {
+   // Running spread average feeds spec.json (the bot's backtest cost model).
+   spreadSum += (Ask - Bid);
+   spreadN++;
+   if(specCountdown <= 0)
+     {
+      ExportSpec();
+      specCountdown = MathMax(1, 60 / MathMax(1, PollSeconds));   // refresh ~once a minute
+     }
+   specCountdown--;
+   ProcessCommands();
+  }
 
 //+------------------------------------------------------------------+
 //| Write the latest OHLC history the Python bot reads.             |
@@ -73,6 +91,34 @@ void ExportRates()
                     DoubleToString((double)Volume[i], 0);
       FileWrite(fh, line);
      }
+   FileClose(fh);
+  }
+
+//+------------------------------------------------------------------+
+//| Broker truth for the bot: contract size, lot limits, live       |
+//| average spread, balance. The bot overrides its config with this  |
+//| so nothing sizing-critical is ever hand-typed.                   |
+//+------------------------------------------------------------------+
+void ExportSpec()
+  {
+   double avgSpread = (spreadN > 0) ? spreadSum / spreadN : (Ask - Bid);
+   int fh = FileOpen(SpecFile(), FILE_WRITE | FILE_TXT | FILE_ANSI);
+   if(fh == INVALID_HANDLE) { Print("Cannot write spec: ", GetLastError()); return; }
+   string j = "{";
+   j = j + "\"symbol\":\"" + Symbol() + "\",";
+   j = j + "\"digits\":" + IntegerToString(Digits) + ",";
+   j = j + "\"contract_size\":" + DoubleToString(MarketInfo(Symbol(), MODE_LOTSIZE), 2) + ",";
+   j = j + "\"min_lot\":" + DoubleToString(MarketInfo(Symbol(), MODE_MINLOT), 2) + ",";
+   j = j + "\"lot_step\":" + DoubleToString(MarketInfo(Symbol(), MODE_LOTSTEP), 2) + ",";
+   j = j + "\"max_lot\":" + DoubleToString(MarketInfo(Symbol(), MODE_MAXLOT), 2) + ",";
+   j = j + "\"stop_level_points\":" + DoubleToString(MarketInfo(Symbol(), MODE_STOPLEVEL), 0) + ",";
+   j = j + "\"spread\":" + DoubleToString(avgSpread, Digits) + ",";
+   j = j + "\"spread_samples\":" + IntegerToString(spreadN) + ",";
+   j = j + "\"account_balance\":" + DoubleToString(AccountBalance(), 2) + ",";
+   j = j + "\"account_currency\":\"" + AccountCurrency() + "\",";
+   j = j + "\"updated\":\"" + TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES | TIME_SECONDS) + "\"";
+   j = j + "}";
+   FileWrite(fh, j);
    FileClose(fh);
   }
 
