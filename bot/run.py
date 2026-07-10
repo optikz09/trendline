@@ -60,7 +60,7 @@ def cmd_backtest(args) -> int:
             s = t.signal
             print(f"{s.time:%Y-%m-%d %H:%M}  {s.side:<5} {s.setup:<6} "
                   f"entry {s.entry:8.2f} stop {s.stop:8.2f} tp {s.target:8.2f}  "
-                  f"-> {t.outcome:<6} {t.r:+.2f}R")
+                  f"-> {t.outcome:<6} {t.r:+.2f}R  {t.days_held:5.1f}d")
     print(result.summary())
     return 0
 

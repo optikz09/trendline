@@ -48,11 +48,15 @@ Detection uses **only data up to the evaluated bar** (no lookahead) so backtest 
 `|slope|` under `max_norm_slope` ATRs/candle (an ATR-normalised stand-in for the visual "<45°"
 rule) · a support line may not sit above any low (resistance: below any high) beyond `tap_tol_atr`.
 
-**Two setups** (`strategy.py`):
+**Two setups** (`strategy.py`) — the PRIMARY pattern is the Break off large trendline highs/lows,
+held for days-to-weeks; the Bounce is the with-trend complement:
 - **Bounce** — price tags the line (`low`/`high` within `tap_tol_atr`) and closes back with a
   same-direction candle. Stop just past the line; target = nearest real S/R giving ≥ `min_rr` (2R).
+  Must agree with the Daily bias (`trend_filter_days`, close vs N-day mean; 0 disables).
 - **Break** — a candle *closes* through the line by more than `break_tol_atr`. Stop on the opposing
   "safety" structure (recent swing over `safety_lookback`); target = nearest S/R giving ≥ 2R.
+  Exempt from the trend filter (it IS the reversal play); optionally require a bigger broken line
+  via `break_min_span_days` / `break_min_taps`.
 
 If no real S/R target reaches 2R, **the signal is skipped**. Among all candidates on a bar the
 engine takes the highest-RR one (`strategy.generate_signal` → sort by `(rr, -risk)`).
@@ -99,10 +103,11 @@ it still matters for offline backtest configs).
 1. **`contract_size` default `1.0` is demo-only.** In live the EA's `spec.json` overrides it with
    broker truth automatically (watch for the `[LIVE] broker spec:` log line before trusting lots);
    for backtests/scans it still comes from config. Verify lots on a demo/cent account first.
-2. **No proven edge.** On real HugosWay H4 data (2024-10..2026-02, `bot/data/XPTUSD240.csv`) the
-   strategy is break-even before costs: 17 trades, 35% win rate, +0.02R/trade — i.e. losing after
-   spread. Most losers are break-shorts fighting the 2025 platinum uptrend; the HTF trend filter
-   (backlog) is the obvious next lever. Do not trade this live yet.
+2. **Thin evidence, small sample.** On real HugosWay H4 data (2024-10..2026-02,
+   `bot/data/XPTUSD240.csv`): raw strategy +0.27R over 17 trades; with the bounce trend filter
+   +1.27R over 16; adding `break_min_span_days: 30` +3.92R over 12 (41.7% win rate). Those are
+   encouraging but it's ~12 trades — do NOT treat parameter picks as proven; forward-test on demo
+   and prefer rulebook-motivated settings over whatever backtested best.
 3. **`max_norm_slope` "45°" filter is an approximation** of a visual rule; tune per instrument.
 4. **No trade management yet** — no trailing stop, break-even move, or partial take-profit. One
    position at a time; entry at bar close.
@@ -121,8 +126,9 @@ it still matters for offline backtest configs).
 - [ ] **Break-and-retest entry** variant (higher win-rate than raw break; rulebook §4).
 - [ ] **Unit tests** for `trendlines.py` and `strategy.py` (pin behaviour on the sample data;
       cost-model tests exist — run `python -m unittest discover tests` from `bot/`).
-- [ ] **Higher-timeframe trend filter** (only take longs when Daily/Weekly trend is up, etc.) —
-      *promoted to top priority*: on real data most losses are break-shorts against the 2025 uptrend.
+- [x] **Higher-timeframe trend filter** — `trend_filter_days` (default 50): bounces must agree with
+      the Daily bias; breaks are exempt (the break off a large line is the core reversal pattern).
+      On real H4 data this took the backtest from +0.27R to +1.27R.
 - [x] **Real historical Platinum data** — `run.py importhst` reads the terminal's `.hst` files
       directly (`bot/data/XPTUSD240.csv`, HugosWay-Live H4 2024-10..2026-02). Open the XPTUSD chart
       and scroll back in MT4 to deepen history, then re-run `importhst`.
@@ -144,7 +150,12 @@ python3 run.py importhst                                          # pull real MT
 python3 -m unittest discover tests                                # unit tests
 ```
 
-## 8. Go-live checklist (HugosWay / PRO4)
+## 8. Demo / go-live checklist (HugosWay / PRO4)
+
+**Demo first.** Create a HugosWay demo login in the terminal (`File → Open an Account`, pick the
+demo server), then follow the same steps below — `--broker mt4` is safe on demo and exercises the
+whole pipeline (EA export → signal → OrderSend → ack).
+
 
 1. Copy `mt4/TrendLineTradingBridge.mq4` → terminal `MQL4/Experts/`, compile in MetaEditor.
 2. Attach EA to one chart of your Platinum symbol at the H1+ TF you'll trade. Enable AutoTrading +

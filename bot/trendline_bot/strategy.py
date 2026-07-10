@@ -44,6 +44,36 @@ class Signal:
         return d
 
 
+def trend_direction(candles: List[Candle], index: int, cfg: Config) -> int:
+    """Daily-bias proxy (rulebook §1): +1 up / -1 down / 0 no opinion (off or warming up).
+
+    Close vs the simple mean of the last `trend_filter_days` worth of bars on the trading
+    timeframe — an indicator-free stand-in for "is the Daily chart pointing up or down".
+    Uses only closes up to `index` (no lookahead).
+    """
+    if cfg.trend_filter_days <= 0:
+        return 0
+    bars_per_day = max(1, round(1440.0 / cfg.timeframe_minutes))
+    period = max(2, int(cfg.trend_filter_days * bars_per_day))
+    if index + 1 < period:
+        return 0
+    mean = sum(c.close for c in candles[index - period + 1: index + 1]) / period
+    close = candles[index].close
+    return 1 if close > mean else (-1 if close < mean else 0)
+
+
+def _line_is_large(candles: List[Candle], ln: Trendline, cfg: Config) -> bool:
+    """Break setups may demand a bigger line than the baseline A+ rules (rulebook §4;
+    the pattern is breaks off the LARGE trendline highs/lows, not every 3-week line)."""
+    if cfg.break_min_taps and len(ln.taps) < cfg.break_min_taps:
+        return False
+    if cfg.break_min_span_days:
+        span = (candles[ln.taps[-1]].time - candles[ln.taps[0]].time).total_seconds() / 86400.0
+        if span < cfg.break_min_span_days:
+            return False
+    return True
+
+
 def _nearest_target(levels: List[float], entry: float, stop: float, side: str, min_rr: float) -> Optional[float]:
     """Closest real S/R level in the trade direction that still yields >= min_rr."""
     risk = abs(entry - stop)
@@ -81,15 +111,16 @@ def generate_signal(candles: List[Candle], index: int, cfg: Config) -> Optional[
     recent_high = max(c.high for c in candles[lo:index + 1])
     recent_low = min(c.low for c in candles[lo:index + 1])
 
+    trend = trend_direction(candles, index, cfg)
     candidates: List[Signal] = []
 
     for ln in lines:
         line_val = ln.value_at(index)
 
         if ln.kind == "support":
-            # --- Bounce long: tag the line and reject upward ---
+            # --- Bounce long: tag the line and reject upward (needs Daily bias up) ---
             touched = abs(cur.low - line_val) <= tap_tol
-            if touched and cur.close > cur.open and cur.close > line_val:
+            if touched and trend >= 0 and cur.close > cur.open and cur.close > line_val:
                 entry = cur.close
                 stop = min(cur.low, line_val) - buf
                 tgt = _nearest_target(res_levels, entry, stop, "long", cfg.min_rr)
@@ -97,8 +128,8 @@ def generate_signal(candles: List[Candle], index: int, cfg: Config) -> Optional[
                     candidates.append(Signal(cur.time, cfg.symbol, "long", "bounce", entry, stop, tgt, a,
                                              f"Bounce off support (slope {ln.slope:+.4f}, {len(ln.taps)} taps)"))
 
-            # --- Break short: close decisively below support ---
-            if cur.close < line_val - break_tol:
+            # --- Break short: close decisively below a large support line ---
+            if cur.close < line_val - break_tol and _line_is_large(candles, ln, cfg):
                 entry = cur.close
                 stop = recent_high + buf          # opposing "safety" structure
                 tgt = _nearest_target(sup_levels, entry, stop, "short", cfg.min_rr)
@@ -107,9 +138,9 @@ def generate_signal(candles: List[Candle], index: int, cfg: Config) -> Optional[
                                              f"Break below support (slope {ln.slope:+.4f}, {len(ln.taps)} taps)"))
 
         else:  # resistance
-            # --- Bounce short: tag the line and reject downward ---
+            # --- Bounce short: tag the line and reject downward (needs Daily bias down) ---
             touched = abs(cur.high - line_val) <= tap_tol
-            if touched and cur.close < cur.open and cur.close < line_val:
+            if touched and trend <= 0 and cur.close < cur.open and cur.close < line_val:
                 entry = cur.close
                 stop = max(cur.high, line_val) + buf
                 tgt = _nearest_target(sup_levels, entry, stop, "short", cfg.min_rr)
@@ -117,8 +148,8 @@ def generate_signal(candles: List[Candle], index: int, cfg: Config) -> Optional[
                     candidates.append(Signal(cur.time, cfg.symbol, "short", "bounce", entry, stop, tgt, a,
                                              f"Bounce off resistance (slope {ln.slope:+.4f}, {len(ln.taps)} taps)"))
 
-            # --- Break long: close decisively above resistance ---
-            if cur.close > line_val + break_tol:
+            # --- Break long: close decisively above a large resistance line ---
+            if cur.close > line_val + break_tol and _line_is_large(candles, ln, cfg):
                 entry = cur.close
                 stop = recent_low - buf
                 tgt = _nearest_target(res_levels, entry, stop, "long", cfg.min_rr)

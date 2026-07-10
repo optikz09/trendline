@@ -29,6 +29,7 @@ class Trade:
     outcome: str      # "target" | "stop" | "open"
     r: float          # realised R multiple, net of costs
     cost_r: float = 0.0  # costs charged on this trade, in R (already deducted from r)
+    days_held: float = 0.0
 
 
 @dataclass
@@ -68,6 +69,15 @@ class BacktestResult:
             f"  (gross {self.total_r + self.total_cost_r:+.2f}, costs -{self.total_cost_r:.2f})",
             f" expectancy   : {self.expectancy:+.2f} R / trade",
         ]
+        if self.n:
+            avg = sum(t.days_held for t in self.trades) / self.n
+            w = [t.days_held for t in self.trades if t.r > 0]
+            l = [t.days_held for t in self.trades if t.r <= 0]
+            lines.append(
+                f" avg hold     : {avg:.1f} days"
+                + (f"  (wins {sum(w)/len(w):.1f}" if w else "  (wins n/a")
+                + (f", losses {sum(l)/len(l):.1f})" if l else ", losses n/a)")
+            )
         return "\n".join(lines)
 
 
@@ -98,15 +108,16 @@ def run_backtest(candles: List[Candle], cfg: Config) -> BacktestResult:
         hit_stop = bar.low <= open_sig.stop if long else bar.high >= open_sig.stop
         hit_tgt = bar.high >= open_sig.target if long else bar.low <= open_sig.target
 
+        held = (bar.time - open_sig.time).total_seconds() / 86400.0
         if hit_stop:
             c = cost_r(open_sig)
             trades.append(Trade(open_sig, bar.time.strftime("%Y-%m-%d %H:%M"), open_sig.stop, "stop",
-                                round(-1.0 - c, 3), c))
+                                round(-1.0 - c, 3), c, round(held, 2)))
             open_sig = None
         elif hit_tgt:
             c = cost_r(open_sig)
             trades.append(Trade(open_sig, bar.time.strftime("%Y-%m-%d %H:%M"), open_sig.target, "target",
-                                round(open_sig.rr - c, 3), c))
+                                round(open_sig.rr - c, 3), c, round(held, 2)))
             open_sig = None
 
     if open_sig is not None:
@@ -114,7 +125,8 @@ def run_backtest(candles: List[Candle], cfg: Config) -> BacktestResult:
         move = ((last.close - open_sig.entry) if open_sig.side == "long" else (open_sig.entry - last.close))
         c = cost_r(open_sig)
         gross = (move / open_sig.risk) if open_sig.risk else 0.0
+        held = (last.time - open_sig.time).total_seconds() / 86400.0
         trades.append(Trade(open_sig, last.time.strftime("%Y-%m-%d %H:%M"), last.close, "open",
-                            round(gross - c, 3), c))
+                            round(gross - c, 3), c, round(held, 2)))
 
     return BacktestResult(trades)

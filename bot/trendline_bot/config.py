@@ -32,6 +32,15 @@ class Config:
     safety_lookback: int = 10         # bars used to locate the opposing "safety" swing on a break
     min_rr: float = 2.0               # minimum reward:risk to take a trade
 
+    # --- higher-timeframe trend filter (rulebook §1 + bounce checklist) ---
+    # Applies to BOUNCES only: they must agree with the Daily bias. Breaks are exempt —
+    # a break of a large trendline is the reversal pattern this bot exists to catch.
+    trend_filter_days: float = 50.0   # bounce longs only above / shorts only below the N-day mean; 0 = off
+
+    # --- "large line" quality bar for BREAK setups (0 = just the normal A+ rules) ---
+    break_min_span_days: float = 0.0  # broken line must span at least this many days
+    break_min_taps: int = 0           # broken line must have at least this many taps
+
     # --- trading costs (backtest realism; defaults of 0 = ideal fills) ---
     spread: float = 0.0               # bid/ask spread in price units, paid once per round turn
     slippage: float = 0.0             # adverse slippage in price units, per side (entry and exit)
