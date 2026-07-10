@@ -19,7 +19,9 @@ built to execute on a **HugosWay PRO4 / MT4** account. Full continuity notes are
 
 ## Live-trading footguns (state these when relevant)
 - `config.contract_size` defaults to `1.0` (demo-only) — must match the broker's platinum contract
-  size or sizing is wrong. Backtest has no spread/slippage/commission model yet.
+  size or sizing is wrong. Backtest costs (`spread`/`slippage`/`commission_per_lot`) default to 0 =
+  ideal fills; set them from real HugosWay quotes before trusting expectancy.
 
 ## Top backlog (see HANDOFF.md §6)
-Cost model → trade management (trailing/BE/partials) → break-and-retest entry → unit tests.
+Trade management (trailing/BE/partials) → break-and-retest entry → unit tests for
+trendlines/strategy (cost-model tests exist: `python -m unittest discover tests` from `bot/`).

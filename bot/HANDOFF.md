@@ -35,6 +35,7 @@ No dependencies to install — pure Python 3.9+ standard library.
 | `bot/gen_sample.py` | Regenerates the deterministic demo dataset. |
 | `bot/sample_data/XPTUSD_H4.csv` | Committed demo series (contains bounce + break setups). |
 | `bot/config.example.json` | Copy to `config.json` (git-ignored) and edit for live. |
+| `bot/tests/` | Unit tests (stdlib `unittest`) — `python -m unittest discover tests` from `bot/`. |
 | `mt4/TrendLineTradingBridge.mq4` | Expert Advisor: exports rates + executes queued orders inside PRO4/MT4. |
 
 ## 2. The strategy in one screen (encoded rules)
@@ -94,17 +95,21 @@ MT4 EA  --writes-->  <bridge>/acks.jsonl             (fill/error status, one per
 3. **`max_norm_slope` "45°" filter is an approximation** of a visual rule; tune per instrument.
 4. **No trade management yet** — no trailing stop, break-even move, or partial take-profit. One
    position at a time; entry at bar close.
-5. **Backtest fills are idealised** — no spread, slippage, or commission modelled. HugosWay spreads
-   on platinum can be wide; add a cost model before trusting expectancy.
+5. **Cost defaults are zero.** The backtest models spread/slippage/commission (config `spread`,
+   `slippage`, `commission_per_lot`) but they default to 0 = ideal fills. Measure HugosWay's real
+   platinum spread and set them before trusting expectancy — on the synthetic sample, a $1 spread
+   alone flips the result from break-even to negative.
 6. **The live loop assumes the last CSV row may be a forming bar.** If the EA only ever writes
    closed bars, the loop is one bar late — acceptable for swing trading, but note it.
 
 ## 6. Open next steps (suggested backlog)
 
-- [ ] **Cost model** in the backtest (spread + commission + slippage) — highest priority before live.
+- [x] **Cost model** in the backtest (spread + commission + slippage) — config `spread`/`slippage`/
+      `commission_per_lot`, charged as a flat R deduction per round turn; tests in `bot/tests/`.
 - [ ] **Trade management**: break-even at 1R, ATR trailing stop, optional partial at 2R (rulebook §6).
 - [ ] **Break-and-retest entry** variant (higher win-rate than raw break; rulebook §4).
-- [ ] **Unit tests** for `trendlines.py` and `strategy.py` (pin behaviour on the sample data).
+- [ ] **Unit tests** for `trendlines.py` and `strategy.py` (pin behaviour on the sample data;
+      cost-model tests exist — run `python -m unittest discover tests` from `bot/`).
 - [ ] **Higher-timeframe trend filter** (only take longs when Daily/Weekly trend is up, etc.).
 - [ ] **Real historical Platinum data** to replace the synthetic sample for meaningful backtests.
 - [ ] **acks.jsonl consumption** in the bot (surface fills/errors back into the live log).
@@ -130,4 +135,5 @@ python3 run.py gensample --out sample_data/XPTUSD_H4.csv         # regenerate de
    `contract_size` to the broker's platinum contract size, `account_balance` + `risk_per_trade`.
 4. Run with `--broker paper` first; confirm signals look sane in the log.
 5. Switch to `--broker mt4` on a **demo/cent** account; confirm orders appear with correct lots/SL/TP.
-6. Only then consider a small live account. Add the cost model + trade management first.
+6. Only then consider a small live account. Set real costs in the config (`spread`, `slippage`,
+   `commission_per_lot`) and add trade management first.

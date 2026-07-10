@@ -14,6 +14,10 @@
   "safety_lookback": 10,
   "min_rr": 2.0,
 
+  "spread": 0.0,
+  "slippage": 0.0,
+  "commission_per_lot": 0.0,
+
   "account_balance": 1000.0,
   "risk_per_trade": 0.01,
   "contract_size": 1.0,

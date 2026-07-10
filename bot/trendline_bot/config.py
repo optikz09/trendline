@@ -32,6 +32,11 @@ class Config:
     safety_lookback: int = 10         # bars used to locate the opposing "safety" swing on a break
     min_rr: float = 2.0               # minimum reward:risk to take a trade
 
+    # --- trading costs (backtest realism; defaults of 0 = ideal fills) ---
+    spread: float = 0.0               # bid/ask spread in price units, paid once per round turn
+    slippage: float = 0.0             # adverse slippage in price units, per side (entry and exit)
+    commission_per_lot: float = 0.0   # round-turn commission per 1.0 lot, in account currency
+
     # --- risk / sizing (see rulebook §7) ---
     account_balance: float = 1000.0   # used for position sizing when the broker can't report it
     risk_per_trade: float = 0.01      # 1% of account risked per trade
