@@ -19,6 +19,7 @@ from typing import Optional
 from .broker import Broker, position_size
 from .config import Config
 from .data import Candle, infer_timeframe_minutes, load_csv
+from .manual_lines import cross_signal, load_lines
 from .strategy import generate_signal
 
 # Sizing-critical fields the EA's spec.json is allowed to override — broker truth
@@ -82,9 +83,17 @@ def run_live(cfg: Config, broker: Broker, bridge_dir: str, once: bool = False) -
                     stamp = candles[closed].time.strftime("%Y-%m-%d %H:%M")
                     if stamp != last_bar_time:
                         last_bar_time = stamp
-                        sig = generate_signal(candles, closed, cfg)
+                        # The user's hand-drawn chart lines beat the auto-fitted ones:
+                        # a close crossing a drawn line is the whole strategy.
+                        drawn = load_lines(os.path.join(bridge_dir, f"{cfg.symbol}_lines.csv"))
+                        if drawn:
+                            sig = cross_signal(candles, closed, drawn, cfg)
+                            mode = f"{len(drawn)} drawn line(s)"
+                        else:
+                            sig = generate_signal(candles, closed, cfg)
+                            mode = "auto lines"
                         if sig is None:
-                            print(f"[LIVE] {stamp}  no setup")
+                            print(f"[LIVE] {stamp}  no setup ({mode})")
                         else:
                             lots = position_size(cfg, sig)
                             oid = broker.place(sig, lots)

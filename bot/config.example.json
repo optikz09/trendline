@@ -14,8 +14,8 @@
   "safety_lookback": 10,
   "min_rr": 2.0,
 
-  "trend_filter_days": 50.0,
-  "break_min_span_days": 30.0,
+  "trend_filter_days": 0.0,
+  "break_min_span_days": 0.0,
   "break_min_taps": 0,
 
   "spread": 0.0,

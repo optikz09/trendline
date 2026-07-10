@@ -21,10 +21,12 @@ built to execute on a **HugosWay PRO4 / MT4** account. Full continuity notes are
 - `config.contract_size` defaults to `1.0` (demo-only). In live the EA's `<symbol>_spec.json`
   overrides it with broker truth; in backtests it comes from config. Backtest costs
   (`spread`/`slippage`/`commission_per_lot`) default to 0 = ideal fills.
-- **The core pattern is the Break off LARGE trendline highs/lows** (user-stated intent), held for
-  days-to-weeks on H4. Bounces are the with-trend complement and must agree with the Daily bias
-  (`trend_filter_days`); breaks are exempt from that filter but can require a bigger broken line
-  (`break_min_span_days` / `break_min_taps`). Calibrate on `bot/data/XPTUSD240.csv` (real data).
+- **KEEP IT SIMPLE (user-stated, repeatedly).** The strategy is: a bar CLOSES across a trendline →
+  buy (up) / sell (down), held days-to-weeks on H4. Do not add filters, indicators, or tuning knobs
+  unless the user asks. The preferred mode is the user's own hand-drawn chart lines
+  (`manual_lines.py`, exported by the EA as `<symbol>_lines.csv`); auto-fitted lines are the
+  fallback. Optional filters (`trend_filter_days`, `break_min_span_days`, `break_min_taps`) exist
+  but default OFF — backtests showed them unstable on the small real-data sample.
 - **Not validated for real money yet** — forward-test on a HugosWay demo account first.
 - The user's HugosWay terminal data folder on this machine:
   `%APPDATA%\MetaQuotes\Terminal\0F19E7A51481BB64C858CDD0D2A04C81` (server `Hugosway-Live`).

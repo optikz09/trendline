@@ -31,6 +31,7 @@ No dependencies to install — pure Python 3.9+ standard library.
 | `bot/trendline_bot/backtest.py` | Event-driven walk-forward backtester. |
 | `bot/trendline_bot/broker.py` | Position sizing + `PaperBroker` + `FileBridgeBroker` (MT4). |
 | `bot/trendline_bot/live.py` | Live poll loop; folds the EA's `<symbol>_spec.json` (broker truth) into the config. |
+| `bot/trendline_bot/manual_lines.py` | Trades the user's hand-drawn chart trendlines: close crosses line → buy/sell. |
 | `bot/trendline_bot/mt4data.py` | Reads MT4 `.hst` history files directly from the terminal — real broker data for backtests. |
 | `bot/run.py` | CLI: `scan` / `backtest` / `live` / `importhst` / `gensample`. |
 | `bot/data/XPTUSD240.csv` | Real HugosWay-Live platinum H4 (2024-10 .. 2026-02), imported via `importhst`. |
@@ -69,9 +70,17 @@ snapped to `lot_step`, clamped to `[min_lot, max_lot]`.
 ```
 MT4 EA  --writes-->  <bridge>/XPTUSD_240_rates.csv   --read by--> bot live loop
 MT4 EA  --writes-->  <bridge>/XPTUSD_spec.json       --read by--> bot (broker truth, ~1/min)
+MT4 EA  --writes-->  <bridge>/XPTUSD_lines.csv       --read by--> bot (user's DRAWN trendlines)
 bot     --writes-->  <bridge>/commands.jsonl         --read by--> MT4 EA (OrderSend)
 MT4 EA  --writes-->  <bridge>/acks.jsonl             (fill/error status, one per id)
 ```
+
+**Manual-lines mode (the preferred, simple mode).** Draw trendlines on the EA's chart with MT4's
+standard trendline tool — every `OBJ_TREND` object is exported (~1/min and on each new bar). If at
+least one drawn line exists, the live loop trades ONLY those: a bar close crossing a line = trade
+(up = buy, down = sell), stop past the recent swing (`safety_lookback` + `stop_buffer_atr`), target
+a fixed `min_rr` (2R). Delete/move lines on the chart to update the bot. With no drawn lines it
+falls back to the auto-fitted trendline engine.
 
 `spec.json` carries the broker's real contract size, lot limits, running average spread, and
 account balance. The live loop overrides the matching config fields with it every cycle, so

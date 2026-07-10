@@ -25,6 +25,7 @@ int      specCountdown = 0;      // timer ticks until the next spec refresh
 
 string RatesFile()    { return BridgeSubfolder + "\\" + Symbol() + "_" + IntegerToString(PeriodMinutes()) + "_rates.csv"; }
 string SpecFile()     { return BridgeSubfolder + "\\" + Symbol() + "_spec.json"; }
+string LinesFile()    { return BridgeSubfolder + "\\" + Symbol() + "_lines.csv"; }
 string CommandsFile() { return BridgeSubfolder + "\\commands.jsonl"; }
 string AcksFile()     { return BridgeSubfolder + "\\acks.jsonl"; }
 int    PeriodMinutes(){ return Period(); }           // MT4 Period() already returns minutes
@@ -54,6 +55,7 @@ void OnTick()
      {
       lastBarTime = Time[0];
       ExportRates();
+      ExportLines();
      }
   }
 
@@ -65,6 +67,7 @@ void OnTimer()
    if(specCountdown <= 0)
      {
       ExportSpec();
+      ExportLines();   // pick up lines the user drew/moved without waiting for a new bar
       specCountdown = MathMax(1, 60 / MathMax(1, PollSeconds));   // refresh ~once a minute
      }
    specCountdown--;
@@ -89,6 +92,29 @@ void ExportRates()
                     DoubleToString(Low[i], Digits) + "," +
                     DoubleToString(Close[i], Digits) + "," +
                     DoubleToString((double)Volume[i], 0);
+      FileWrite(fh, line);
+     }
+   FileClose(fh);
+  }
+
+//+------------------------------------------------------------------+
+//| Export every hand-drawn trendline on this chart. The bot trades  |
+//| a bar CLOSE crossing one of these: up = buy, down = sell.        |
+//+------------------------------------------------------------------+
+void ExportLines()
+  {
+   int fh = FileOpen(LinesFile(), FILE_WRITE | FILE_TXT | FILE_ANSI);
+   if(fh == INVALID_HANDLE) { Print("Cannot write lines: ", GetLastError()); return; }
+   FileWrite(fh, "name,time1,price1,time2,price2");
+   for(int i = ObjectsTotal() - 1; i >= 0; i--)
+     {
+      string nm = ObjectName(i);
+      if(ObjectType(nm) != OBJ_TREND) continue;
+      string line = nm + "," +
+                    TimeToString((datetime)ObjectGet(nm, OBJPROP_TIME1), TIME_DATE | TIME_MINUTES) + "," +
+                    DoubleToString(ObjectGet(nm, OBJPROP_PRICE1), Digits) + "," +
+                    TimeToString((datetime)ObjectGet(nm, OBJPROP_TIME2), TIME_DATE | TIME_MINUTES) + "," +
+                    DoubleToString(ObjectGet(nm, OBJPROP_PRICE2), Digits);
       FileWrite(fh, line);
      }
    FileClose(fh);
