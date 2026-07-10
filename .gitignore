@@ -1,0 +1,19 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# local trading config + runtime bridge (never commit live config or credentials)
+bot/config.json
+bot/bridge/
+
+# packaged exports
+*.zip
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Claude Code local permissions
+.claude/settings.local.json

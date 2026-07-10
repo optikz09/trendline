@@ -1,0 +1,25 @@
+{
+  "symbol": "XPTUSD",
+  "timeframe_minutes": 240,
+
+  "min_taps": 3,
+  "min_tap_gap": 6,
+  "min_span_days": 21.0,
+  "max_norm_slope": 1.0,
+  "tap_tol_atr": 0.25,
+
+  "atr_period": 14,
+  "break_tol_atr": 0.10,
+  "stop_buffer_atr": 0.50,
+  "safety_lookback": 10,
+  "min_rr": 2.0,
+
+  "account_balance": 1000.0,
+  "risk_per_trade": 0.01,
+  "contract_size": 1.0,
+  "min_lot": 0.01,
+  "lot_step": 0.01,
+  "max_lot": 100.0,
+
+  "poll_seconds": 30
+}
